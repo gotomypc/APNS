@@ -160,7 +160,7 @@ module APNS
       ssl          = OpenSSL::SSL::SSLSocket.new(sock, context)
       ssl.connect
       return ssl, sock
-    rescue SystemCallError
+    rescue Errno::EPIPE, OpenSSL::SSL::SSLError
       if (retries += 1) < 5
         sleep 1
         retry
@@ -226,7 +226,7 @@ module APNS
         ssl.close
         sock.close
       end
-    rescue Errno::ECONNABORTED, Errno::EPIPE, Errno::ECONNRESET
+    rescue Errno::ECONNABORTED, Errno::EPIPE, Errno::ECONNRESET, OpenSSL::SSL::SSLError
       if (retries += 1) < 5
         self.remove_connection(host, port)
         retry
