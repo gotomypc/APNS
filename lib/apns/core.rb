@@ -26,6 +26,36 @@ module APNS
   require 'openssl'
   require 'json'
 
+  ERROR_BYTES = 6
+
+  class APNSError < StandardError
+    attr_reader :code, :notification_id
+
+    # Error codes from Apple
+    # http://bit.ly/OyhrPT
+    CODE_MESSAGES = {
+      1 => "Processing error",
+      2 => "Missing device token",
+      3 => "Missing topic",
+      4 => "Missing payload",
+      5 => "Missing token size",
+      6 => "Missing topic size",
+      7 => "Missing payload size",
+      8 => "Invalid token",
+      255 => "None (unknown error)"
+    }
+
+    def initialize(code, notification_id)
+      @code = code
+      @notification_id = notification_id
+    end
+
+    def message
+      "Failed to deliver push notification #{notification_id}, received APN error '#{CODE_MESSAGE[code]}'"
+    end
+ 
+  end
+
   # Host for push notification service
   # production: gateway.push.apple.com
   # development: gateway.sandbox.apple.com
@@ -222,6 +252,7 @@ module APNS
       ssl, sock = self.get_connection(host, port)
       yield ssl if block_given?
 
+      check_errors(ssl)
       unless @cache_connections
         ssl.close
         sock.close
@@ -233,6 +264,17 @@ module APNS
       else
         # too-many retries, re-raise
         raise
+      end
+    end
+  end
+
+  def self.check_errors(socket)
+    if IO.select([socket], nil, nil, 1)
+      if error_packet = socket.read(ERROR_BYTES)
+        error_data = error_packet.unpack("ccN") 
+        if error_data[0] == 8 && error_data[1] != 0
+          raise APNSError.new(error_data[1], error_data[2])
+        end
       end
     end
   end
