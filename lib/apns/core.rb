@@ -75,8 +75,20 @@ module APNS
   @cache_connections = false
   @connections = {}
 
+  # TCP and SSL socket performance tweak features
+  @tcp_nodelay = false
+  @socket_keepalive = false
+  @status_timeout = 0.5
+  @retries = 5
+  
+  @logger = nil
+  @log_level = :debug
+
+
   class << self
-    attr_accessor :host, :port, :feedback_host, :feedback_port, :pem, :pass, :cache_connections
+    attr_accessor :host, :port, :feedback_host, :feedback_port, :pem, :pass, 
+                  :cache_connections, :socket_keepalive, :tcp_nodelay,
+                  :status_timeout, :logger, :log_level, :retries
   end
 
   def self.establish_notification_connection
@@ -188,14 +200,17 @@ module APNS
     begin
       sock         = TCPSocket.new(host, port)
       ssl          = OpenSSL::SSL::SSLSocket.new(sock, context)
+      sock.setsockopt(Socket::SOL_SOCKET, Socket::SO_KEEPALIVE, 1) if @socket_keepalive
+      sock.setsockopt(Socket::IPPROTO_TCP, Socket::TCP_NODELAY, 1) if @tcp_nodelay
       ssl.connect
       return ssl, sock
     rescue Errno::EPIPE, OpenSSL::SSL::SSLError
-      if (retries += 1) < 5
+      if (retries += 1) < @retries
         sleep 1
         retry
       else
         # Too many retries, re-raise this exception
+        log("Exeption while opening connection: #{$!}. Too many retries raising exception")
         raise
       end
     end
@@ -258,24 +273,32 @@ module APNS
         sock.close
       end
     rescue Errno::ECONNABORTED, Errno::EPIPE, Errno::ECONNRESET, OpenSSL::SSL::SSLError
-      if (retries += 1) < 5
+      if (retries += 1) < @retries
         self.remove_connection(host, port)
         retry
       else
         # too-many retries, re-raise
+        log("Exeption: #{$!}. Too many retries raising exception")
         raise
       end
     end
   end
 
   def self.check_errors(socket)
-    if IO.select([socket], nil, nil, 1)
+    if IO.select([socket], nil, nil, @status_timeout)
       if error_packet = socket.read(ERROR_BYTES)
+        log("received error data from SSL socket => #{error_packet.inspect}")
         error_data = error_packet.unpack("ccN") 
         if error_data[0] == 8 && error_data[1] != 0
           raise APNSError.new(error_data[1], error_data[2])
         end
       end
+    end
+  end
+
+  def self.log(message)
+    if @logger
+      @logger.send(@log_level, message)
     end
   end
 end
