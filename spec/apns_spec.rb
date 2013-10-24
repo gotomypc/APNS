@@ -45,6 +45,7 @@ describe APNS do
     apns = APNS.bundle_specific("com.somecool.app.dev")
     defined?(ComSomecoolApp).should_not == nil
     ComSomecoolApp.host.should == "gateway.sandbox.push.apple.com"
+    ComSomecoolApp.feedback_host.should == "feedback.sandbox.push.apple.com"
     #make sure the new module has a new connections variable
     ComSomecoolApp.connections.object_id.should_not be_equal(APNS.connections.object_id)
   end

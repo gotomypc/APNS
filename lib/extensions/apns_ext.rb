@@ -15,6 +15,7 @@ module APNS
       klass.pem = "#{cert_directory}#{bundle_id}.pem"
       if bundle_id.end_with? '.dev'
         klass.host = 'gateway.sandbox.push.apple.com'
+        klass.feedback_host = 'feedback.sandbox.push.apple.com'
       end
       klass
     end 
