@@ -13,6 +13,9 @@ module APNS
       klass = eval("::#{klass_name} = APNS.dup")
       klass.connections = {}
       klass.pem = "#{cert_directory}#{bundle_id}.pem"
+      if bundle_id.end_with? '.dev'
+        klass.host = 'gateway.sandbox.push.apple.com'
+      end
       klass
     end 
   end
